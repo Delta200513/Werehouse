@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Склад: Панель управления</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 20px; max-width: 1000px; margin: auto; }
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .flex { display: flex; gap: 10px; }
+        input, select { padding: 10px; border: 1px solid #ddd; border-radius: 5px; flex: 1; }
+        .btn { background: #1a73e8; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+        .task-item { border-left: 6px solid #1a73e8; padding: 15px; margin: 10px 0; background: #fafafa; position: relative; border-radius: 4px; }
+        .btn-del { position: absolute; right: 15px; top: 15px; color: #ff4444; border: none; background: none; cursor: pointer; font-size: 20px; }
+        .progress-bar { background: #eee; height: 12px; border-radius: 6px; margin-top: 10px; overflow: hidden; }
+        .progress-fill { background: #4CAF50; height: 100%; transition: width 0.5s; }
+        .badge { font-size: 11px; padding: 3px 7px; border-radius: 10px; background: #e8f0fe; color: #1967d2; }
+    </style>
+</head>
+<body>
+    <h1>📦 Управление складом</h1>
+
+    <div class="card">
+        <h3>➕ Новое задание</h3>
+        <div class="flex">
+            <input type="text" id="tTitle" placeholder="Название задачи">
+            <select id="tType"><option value="receiving">Приемка</option><option value="picking">Сборка</option></select>
+            <input type="number" id="tTotal" placeholder="Кол-во" style="max-width: 100px;">
+            <button class="btn" onclick="addTask()">Добавить</button>
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px;">
+        <div class="card">
+            <h2>📋 Задания</h2>
+            <div id="tasksList"></div>
+        </div>
+        <div class="card">
+            <h2>📱 Живой лог сканов</h2>
+            <div id="scansList"></div>
+        </div>
+    </div>
+
+    <script>
+        async function refresh() {
+            const [tRes, sRes] = await Promise.all([fetch('/api/tasks'), fetch('/api/scans')]);
+            const tasks = await tRes.json();
+            const scans = await sRes.json();
+
+            document.getElementById('tasksList').innerHTML = tasks.map(t => `
+                <div class="task-item">
+                    <button class="btn-del" onclick="delTask(${t.id})">&times;</button>
+                    <span class="badge">${t.type == 'receiving' ? 'ПРИЕМКА' : 'СБОРКА'}</span>
+                    <div style="font-weight:bold; margin-top:5px;">${t.title}</div>
+                    <div style="font-size:13px; color:#666;">Выполнено: ${t.progress} из ${t.total}</div>
+                    <div class="progress-bar"><div class="progress-fill" style="width:${(t.progress/t.total)*100}%"></div></div>
+                </div>
+            `).join('');
+
+            document.getElementById('scansList').innerHTML = scans.slice(-7).reverse().map(s => `
+                <div style="padding:8px; border-bottom:1px solid #eee; font-size:13px;">
+                    <b>${s.qrCode}</b> <small style="color:#999">${new Date(s.timestamp).toLocaleTimeString()}</small><br>
+                    <span style="color:${s.type=='receiving'?'blue':'orange'}">${s.type}</span>
+                </div>
+            `).join('');
+        }
+
+        async function addTask() {
+            const title = document.getElementById('tTitle').value;
+            const type = document.getElementById('tType').value;
+            const total = document.getElementById('tTotal').value;
+            if(!title || !total) return;
+            await fetch('/api/tasks/add', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ title, type, total })
+            });
+            refresh();
+        }
+
+        async function delTask(id) { await fetch(`/api/tasks/${id}`, { method: 'DELETE' }); refresh(); }
+        setInterval(refresh, 2000); refresh();
+    </script>
+</body>
+</html>
